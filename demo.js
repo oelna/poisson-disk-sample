@@ -1,84 +1,94 @@
+var objectsList = [];
 
-$(document).ready(function() {
+document.addEventListener('DOMContentLoaded', function () {
 
-	// Constants
-	var	  CANVAS_WIDTH = 1200
-		, CANVAS_HEIGHT = 700;
+	const windowWidth  = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
+	const windowHeight = window.innerHeight|| document.documentElement.clientHeight|| document.body.clientHeight;
 
-	// Add canvas to page
-	var canvasElement = $("<canvas width='" + CANVAS_WIDTH + "' height='" + CANVAS_HEIGHT + "'></canvas>");
-	window.canvas = canvasElement.get(0).getContext("2d");
-	canvasElement.appendTo('body');
+	// settings
+	const containerWidth = windowWidth - 20;
+	const containerHeight = windowHeight - 20;
 
+	const distance = 30;
 
+	// Add container to page
+	const namespace = 'http://www.w3.org/2000/svg';
 
-	var sampler = new PoissonDiskSampler( CANVAS_WIDTH, CANVAS_HEIGHT, 30, 30 );
-	sampler.grid.drawGrid( canvas );
+	const containerElement = document.createElementNS(namespace, 'svg');
+	containerElement.setAttribute('viewBox', '0 0 ' + containerWidth + ' ' + containerHeight);
+	containerElement.setAttribute('xmlns', namespace);
+	containerElement.setAttribute('width', containerWidth);
+	containerElement.setAttribute('height', containerHeight);
+	
+	let groupPoints = document.createElementNS(namespace, 'g');
+	groupPoints.setAttributeNS(null, 'id', 'points');
+	containerElement.appendChild(groupPoints);
 
+	let groupLines = document.createElementNS(namespace, 'g');
+	groupLines.setAttributeNS(null, 'id', 'lines');
+	containerElement.appendChild(groupLines);
+
+	document.body.appendChild(containerElement);
+
+	// start sampling
+	var sampler = new PoissonDiskSampler(containerWidth, containerHeight, distance, distance);
 	var solution = sampler.sampleUntilSolution();
-	sampler.drawOutputList( canvas )
 
-/*
-	// Render loop
-	var timer = setInterval( function(){
-		if ( ! sampler.sample() ){
-			console.log( "Done. "+sampler.outputList.length+" points found...like a boss." );
-			clearInterval( timer );
+	// delayed output on screen for a nice effect
+	let timer = setInterval(function() {
+
+		let sample = sampler.outputList.pop();
+
+		sampler.grid.drawPoint(sample, '#c00', containerElement);
+
+		if (sampler.outputList.length <= 0) {
+			clearInterval(timer);
 		}
-		sampler.drawOutputList( canvas );
 
-	}, 1);
-*/
-
+	}, 0.15);
 });
 
+Grid.prototype.drawPoint = function(point, color, canvas) {
 
+	let x = point.x.toFixed(2);
+	let y = point.y.toFixed(2);
+	let id = window.objectsList.length + 1;
 
-PoissonDiskSampler.prototype.drawOutputList = function( canvas ){
-	for ( var i = 0; i < this.outputList.length; i++ ){
-		this.grid.drawPoint( this.outputList[ i ], "#444", canvas );
+	let pointElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+	pointElement.setAttributeNS(null, 'cx', x);
+	pointElement.setAttributeNS(null, 'cy', y);
+	pointElement.setAttributeNS(null, 'r', 2);
+	pointElement.setAttributeNS(null, 'data-id', id);
+	pointElement.setAttributeNS(null, 'fill', color);
+
+	canvas.querySelector('#points').appendChild(pointElement);
+
+	let safety = 0;
+	for (circle of window.objectsList) {
+		
+		const targetX = circle.getAttribute('cx');
+		const targetY = circle.getAttribute('cy');
+
+		const xDiff = targetX - x; 
+		const yDiff = targetY - y;
+
+		const distance = Math.sqrt(xDiff*xDiff + yDiff*yDiff);
+
+		if (distance < 60) {
+			let lineElement = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+			lineElement.setAttributeNS(null, 'x1', x);
+			lineElement.setAttributeNS(null, 'y1', y);
+			lineElement.setAttributeNS(null, 'x2', targetX);
+			lineElement.setAttributeNS(null, 'y2', targetY);
+			lineElement.setAttributeNS(null, 'data-for', id);
+			lineElement.setAttributeNS(null, 'stroke', '#000');
+			canvas.querySelector('#lines').appendChild(lineElement);
+
+			safety += 1;
+		}
+
+		if (safety > 25) break;
 	}
-}
 
-
-Grid.prototype.drawGrid = function( canvas ){
-
-	canvas.lineWidth = 0.05;
-	canvas.strokeStyle = 'black';
-
-	// Borders
-	canvas.beginPath();
-	canvas.moveTo( 0, 0 );
-	canvas.lineTo( this.width, 0 );
-	canvas.lineTo( this.width, this.height );
-	canvas.lineTo( 0, this.height );
-	canvas.lineTo( 0, 0 );
-	canvas.stroke();
-
-	// Vertical lines
-	for ( var x = 1; x < this.cellsWide; x++ ){
-		canvas.beginPath();
-		canvas.moveTo( x * this.cellSize, 0 );
-		canvas.lineTo( x * this.cellSize, this.height );
-		canvas.stroke();
-	}
-
-	// Horizontal lines
-	for ( var y = 1; y < this.cellsHigh; y++ ){
-		canvas.beginPath();
-		canvas.moveTo( 0, y * this.cellSize );
-		canvas.lineTo( this.width, y * this.cellSize );
-		canvas.stroke();
-	}
-}
-
-Grid.prototype.drawPoint = function( point, color, canvas ){
-	// Default color
-	color =  color || '#aaa';
-	// Draw a circle
-	canvas.beginPath();
-	// arc(x, y, radius, startAngle, endAngle, anticlockwise)
-	canvas.arc( point.x, point.y, this.pointSize, 0, 2 * Math.PI, false);
-	canvas.fillStyle = color;
-	canvas.fill();
+	window.objectsList.push(pointElement);
 }
